@@ -107,6 +107,66 @@ parse_args (const int argc, char *argv[],
   return;
 }
 
+void
+parse_args_1 (const int argc, char *argv[],
+            char **initial_graph_name, char **action_stream_name,
+            int64_t * batch_size, int64_t * nbatch,
+			double *threshold, double *epsilonchange)
+{
+  int k = 1;
+  int seen_batch = 0, seen_nbatch = 0;
+  if (k >= argc)
+    return;
+  while (k < argc && argv[k][0] == '-') {
+    if (0 == strcmp (argv[k], "--batch") || 0 == strcmp (argv[k], "-b")) {
+      if (seen_batch)
+        goto err;
+      seen_batch = 1;
+      ++k;
+      if (k >= argc)
+        goto err;
+      *batch_size = strtol (argv[k], NULL, 10);
+      if (batch_size <= 0)
+        goto err;
+      ++k;
+    } else if (0 == strcmp (argv[k], "--num-batches")
+             || 0 == strcmp (argv[k], "-n")) {
+      if (seen_nbatch)
+        goto err;
+      seen_nbatch = 1;
+      ++k;
+      if (k >= argc)
+        goto err;
+      *nbatch = strtol (argv[k], NULL, 10);
+      if (nbatch < 0)
+        goto err;
+      ++k;
+    } else if (0 == strcmp (argv[k], "--help")
+             || 0 == strcmp (argv[k], "-h") || 0 == strcmp (argv[k], "-?")) {
+      usage (stdout, argv[0]);
+      exit (EXIT_SUCCESS);
+      return;
+    } else if (0 == strcmp (argv[k], "--")) {
+      ++k;
+      break;
+    }
+  }
+  if (k < argc)
+    *initial_graph_name = argv[k++];
+  if (k < argc)
+    *action_stream_name = argv[k++];
+
+  *threshold = strtol (argv[k], NULL, 10); //argv[k++];
+  k++;
+  *epsilonchange = strtol (argv[k], NULL, 10); //argv[k++];
+  k++;
+
+  return;
+ err:
+  usage (stderr, argv[0]);
+  exit (EXIT_FAILURE);
+  return;
+}
 /* }}} */
 
 /**

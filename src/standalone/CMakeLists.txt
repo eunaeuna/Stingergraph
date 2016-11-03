@@ -60,6 +60,15 @@ target_link_libraries(stinger_insert_remove_benchmark stinger_utils)
 
 ##############################################################################
 
+set(_pagerank_sources
+  page_rank/main.c
+)
+
+add_executable(stinger_pagerank_sources ${_pagerank_sources})
+target_link_libraries(stinger_pagerank_sources stinger_utils)
+
+##############################################################################
+
 set(_matvev_sources
   matvec/main.c
 )
