@@ -20,11 +20,15 @@
 
 #define EPSILON_DEFAULT 1e-8
 #define DAMPINGFACTOR_DEFAULT 0.85
-#define MAXITER_DEFAULT 20
+#define MAXITER_DEFAULT 50 //20
+
+#define NO_ITERATION_LIMIT 1
+#define COUNT_NUM_V_DELTA  1
+#define ADD_GRAPH_UPDATE   1
 
 int64_t page_rank_subset(stinger_t * S, int64_t NV, uint8_t * vertex_set, int64_t vertex_set_size, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter);
 //int64_t page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter);
-int64_t page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter, double threashold);
+int64_t page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon1, double dampingfactor, int64_t maxiter, double threshold1);
 int64_t page_rank (stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter);
 int64_t page_rank_type(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter, int64_t type);
 int64_t page_rank_type_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter, int64_t type);
@@ -199,12 +203,18 @@ main (const int argc, char *argv[])
   double dampingfactor = DAMPINGFACTOR_DEFAULT;
   int64_t maxiter = MAXITER_DEFAULT;
 
+#if COUNT_NUM_V_DELTA == 1
   fp = fopen("delta_count.txt", "a");
 
   parse_args_1 (argc, argv, &initial_graph_name, &action_stream_name, &batch_size, &nbatch, &threshold, &epsilonchange);
   STATS_INIT();
 
   LOG_I_A("!!threshold: %5.10e, epsilon_change: %5.10e", threshold, epsilonchange);
+#else
+  parse_args (argc, argv, &initial_graph_name, &action_stream_name, &batch_size, &nbatch);
+#endif
+
+  STATS_INIT();
 
   load_graph_and_action_stream (initial_graph_name, &nv, &ne, (int64_t**)&off,
 	      (int64_t**)&ind, (int64_t**)&weight, (int64_t**)&graphmem,
@@ -223,15 +233,15 @@ main (const int argc, char *argv[])
   S = stinger_new ();//added
   stinger_set_initial_edges (S, nv, 0, off, ind, weight, NULL, NULL, -2);//added
   PRINT_STAT_DOUBLE ("time_stinger", toc ());
-#if 0
-  page_rank_directed(S, nv, pr, tmp_pr, epsilon, dampingfactor, maxiter);
-#else
-  LOG_I_A("threashold: %5.10e, epsilon: %5.10e", threshold, epsilonchange);
-  double epsilonchange1 = pow(10, -(epsilonchange));
-  double threshold1 = threshold * 0.01;
-  LOG_I_A("threashold1: %e, epsilon1: %e", threshold1, epsilonchange1);
-  page_rank_directed(S, nv, pr, tmp_pr, epsilonchange1, dampingfactor, maxiter, threshold1);
 
+#if COUNT_NUM_V_DELTA == 1
+  LOG_I_A("threshold: %5.10e, epsilon: %5.10e", threshold, epsilonchange);
+  double epsilonchange1 = pow(10, -(epsilonchange));
+  double threshold1 = threshold * 0.0005;
+  LOG_I_A("threshold1: %e, epsilon1: %e", threshold1, epsilonchange1);
+  page_rank_directed(S, nv, pr, tmp_pr, epsilonchange1, dampingfactor, maxiter, threshold1);
+#else
+  page_rank_directed(S, nv, pr, tmp_pr, epsilon, dampingfactor, maxiter);
 #endif
   STATS_END ();
   free(tmp_pr);
@@ -351,14 +361,14 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, d
   int64_t iter_count = 0;
 
   LOG_I_A("NV : %ld", NV);
-  LOG_I_A("threashold: %5.10e, epsilon: %5.10e", threshold1, epsilon1);
+  LOG_I_A("threshold: %5.10e, epsilon: %5.10e", threshold1, epsilon1);
 
   while (delta > epsilon1 && iter > 0) {
     iter_count++;
 
     double pr_constant = 0.0;
 
-    OMP("omp parallel for reduction(+:pr_constant)")
+//    OMP("omp parallel for reduction(+:pr_constant)")
     for (uint64_t v = 0; v < NV; v++) {
       tmp_pr[v] = 0;
       if (stinger_outdegree(S,v) == 0) {
@@ -375,14 +385,14 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, d
       writeef(&pr_lock[STINGER_EDGE_DEST],count+1);
     } STINGER_PARALLEL_FORALL_EDGES_OF_ALL_TYPES_END();
 
-    OMP("omp parallel for")
+//    OMP("omp parallel for")
     for (uint64_t v = 0; v < NV; v++) {
       tmp_pr[v] = (tmp_pr[v] + pr_constant / (double)NV) * dampingfactor + (((double)(1-dampingfactor)) / ((double)NV));
     }
 
     delta = 0;
     int count = 0;
-    OMP("omp parallel for reduction(+:delta)")
+//    OMP("omp parallel for reduction(+:delta)")
     for (uint64_t v = 0; v < NV; v++) {
       double mydelta = tmp_pr[v] - pr[v];
       if (mydelta < 0)
@@ -395,7 +405,7 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr_in, d
     //LOG_I_A("count : %d", count);
     fprintf(fp, "%d ", count);
 
-    OMP("omp parallel for")
+//    OMP("omp parallel for")
     for (uint64_t v = 0; v < NV; v++) {
       pr[v] = tmp_pr[v];
     }
