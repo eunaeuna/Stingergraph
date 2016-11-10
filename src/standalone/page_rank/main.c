@@ -399,6 +399,8 @@ main (const int argc, char *argv[])
   }
   printf("diff_count: %d\n", diff_count);
   fclose(fp);
+  fclose(fp_pr);
+#endif
 #endif
 }
 
