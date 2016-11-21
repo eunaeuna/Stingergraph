@@ -22,11 +22,13 @@
 #define DAMPINGFACTOR_DEFAULT 0.85
 #define MAXITER_DEFAULT 20 //50 //20
 
-#define NO_ITERATION_LIMIT 0
-#define COUNT_NUM_V_DELTA  0
-#define ADD_GRAPH_UPDATE   0
-#define SAVE_PR_VALUES     0
+#define NO_ITERATION_LIMIT 1
+#define COUNT_NUM_V_DELTA  1
+#define ADD_GRAPH_UPDATE   1
+#define SAVE_PR_VALUES     1
 #define TEST_EPSLION_THRESHOLD 1
+#define IGNORE_PR_CONST    1
+#define CAL_PR_CHANGES     0
 
 int64_t page_rank_subset(stinger_t * S, int64_t NV, uint8_t * vertex_set, int64_t vertex_set_size, double * pr, double * tmp_pr_in, double epsilon, double dampingfactor, int64_t maxiter);
 #if TEST_EPSLION_THRESHOLD == 1
@@ -233,6 +235,11 @@ main (const int argc, char *argv[])
   double *pr = (double*)xmalloc(sizeof(double) * nv);
   double *tmp_pr = (double*)xmalloc(sizeof(double) * nv);
 
+  //pr[] initialization
+  for(uint64_t v = 0; v < nv; v++) {
+	pr[v] = 1 / ((double)nv);
+  }
+
   tic ();
   S = stinger_new ();//added
   stinger_set_initial_edges (S, nv, 0, off, ind, weight, NULL, NULL, -2);//added
@@ -251,6 +258,20 @@ main (const int argc, char *argv[])
 #else
   page_rank_directed(S, nv, pr, tmp_pr, epsilon, dampingfactor, maxiter);
 #endif
+#endif
+
+#if SAVE_PR_VALUES == 1
+  LOG_I_A("!!!!!!!!!!!!!!!!called %d \n", fp_idx);
+  char buff[50];
+  sprintf(buff, "pr_values_%d.txt", fp_idx++);
+  fp_pr = fopen(buff, "w");
+#endif
+#if SAVE_PR_VALUES == 1
+  for (uint64_t v = 0; v < nv; v++) {
+    fprintf(fp_pr, "%e ", pr[v]);
+    if (((v+1) % 10) == 0) fprintf(fp_pr, "\n");
+  }
+  fclose(fp_pr);
 #endif
 
 #if ADD_GRAPH_UPDATE == 1
@@ -297,14 +318,14 @@ main (const int argc, char *argv[])
       //const int64_t j = actions[2 * k + 1];
 	  int64_t i = actions[2 * k];
       int64_t j = actions[2 * k + 1];
-      //printf("----i: %" PRId64 "\n", i);
-     // printf("----j: %" PRId64 "\n", j);
+      //printf("----i: %" PRId64 ", ", i);
+      //printf("----j: %" PRId64 "\n", j);
 
-      //stinger/stinger_core/src/stinger.c
-      //because of --> nv    = (3*nv)/4;
-      if (i > nv * 0.75) i = nv * 0.7;
-      if (j > nv * 0.75) j = nv * 0.7;
-#if 1
+      //stinger/stinger_core/src/stinger.c, because of --> nv    = (3*nv)/4;
+      //ccmake: change edge and vertex type to '1' and size to '20'
+      //if (i > nv * 0.75) i = nv * 0.7;
+      //if (j > nv * 0.75) j = nv * 0.7;
+#if 0
       if (i != j && i < 0) {
 	     stinger_remove_edge(S, 0, ~i, ~j);
 	     stinger_remove_edge(S, 0, ~j, ~i);
@@ -312,7 +333,12 @@ main (const int argc, char *argv[])
 #endif
       if (i != j && i >= 0) {
 	     stinger_insert_edge (S, 0, i, j, 1, actno+2);
-	     stinger_insert_edge (S, 0, j, i, 1, actno+2);
+	     //stinger_insert_edge (S, 0, j, i, 1, actno+2); //directed graph
+#if CAL_PR_CHANGES == 1
+	      int64_t outdegree = stinger_outdegree(S, j);
+	      pr[i] += (((double)pr[j]) / ((double) (outdegree ? outdegree : nv -1)));
+	     ////////////////////////////////////////////////////////////
+#endif
       }
 
     }
@@ -321,7 +347,7 @@ main (const int argc, char *argv[])
   } /* End of batch */
 #endif
 
-#if 0
+#if 1
   /* Print the times */
   double time_updates = 0;
   for (int64_t k = 0; k < nbatch; k++) {
@@ -343,32 +369,74 @@ main (const int argc, char *argv[])
 #endif //end of update
 
 
-#if 1
+#if SAVE_PR_VALUES == 1
+  LOG_I_A("!!!!!!!!!!!!!!!!called %d \n", fp_idx);
+//  char buff[50];
+  sprintf(buff, "pr_values_%d.txt", fp_idx++);
+  fp_pr = fopen(buff, "w");
+//  fp_pr = fopen("pr_values_1.txt", "w");
+#endif
+#if SAVE_PR_VALUES == 1
+  for (uint64_t v = 0; v < nv; v++) {
+    fprintf(fp_pr, "%e ", pr[v]);
+    if (((v+1) % 10) == 0) fprintf(fp_pr, "\n");
+  }
+  fclose(fp_pr);
+#endif
+
+#if ADD_GRAPH_UPDATE == 1
   //initialize pr, tmp_pr
+#if CAL_PR_CHANGES != 1
   free(tmp_pr);
-  free(pr);
-  pr = (double*)xmalloc(sizeof(double) * nv);
+//  free(pr);
+  double *new_pr = (double*)xmalloc(sizeof(double) * nv);
   tmp_pr = (double*)xmalloc(sizeof(double) * nv);
+
+  //pr[] initialization
+  for(uint64_t v = 0; v < nv; v++) {
+	  new_pr[v] = 1 / ((double)nv);
+  }
+#endif
   //call pagerank again
 #if TEST_EPSLION_THRESHOLD == 1
+#if CAL_PR_CHANGES != 1
   LOG_I_A("threshold: %5.5e, epsilon: %5.5e", threshold, epsilonchange);
-  page_rank_directed(S, nv, pr, tmp_pr, epsilonchange, dampingfactor, maxiter, threshold);
+  page_rank_directed(S, nv, new_pr, tmp_pr, epsilonchange, dampingfactor, maxiter, threshold);
+#endif
 #else
-  page_rank_directed(S, nv, pr, tmp_pr, epsilon, dampingfactor, maxiter);
+  page_rank_directed(S, nv, new_pr, tmp_pr, epsilon, dampingfactor, maxiter);
 #endif
 #endif
 
 #if COUNT_NUM_V_DELTA == 1
   fclose(fp);
 #endif
-  STATS_END ();
-  free(tmp_pr);
-  free(pr);
+
+#if SAVE_PR_VALUES == 1
+  LOG_I_A("!!!!!!!!!!!!!!!!called %d \n", fp_idx);
+//  char buff[50];
+  sprintf(buff, "pr_values_%d.txt", fp_idx++);
+  fp_pr = fopen(buff, "w");
+//  fp_pr = fopen("pr_values_2.txt", "w");
+#endif
+#if SAVE_PR_VALUES == 1
+  for (uint64_t v = 0; v < nv; v++) {
+    fprintf(fp_pr, "%e ", new_pr[v]);
+    if (((v+1) % 10) == 0) fprintf(fp_pr, "\n");
+  }
+  fclose(fp_pr);
+#endif
+
+    free(tmp_pr);
+    free(pr);
+    free(new_pr);
+    STATS_END ();
 
 #if SAVE_PR_VALUES == 1
 //pr value comparison
-  fp =    fopen("pr_values_0.txt", "r");
-  fp_pr = fopen("pr_values_1.txt", "r");
+  fp =    fopen("pr_values_1.txt", "r");
+  fp_pr = fopen("pr_values_2.txt", "r");
+
 
   if (fp == NULL || fp_pr == NULL)
   {
@@ -379,16 +447,22 @@ main (const int argc, char *argv[])
   double val1, val2;
   double diff_epsilon = 1e-8;
   int diff_count = 0;
-  //int num = 0;
+  int num = 0;
   while (!feof(fp) && !feof(fp_pr))
   //if (num == 0)
   {
 
 	  fscanf(fp, "%lf", &val1);
 	  fscanf(fp_pr, "%lf", &val2);
+	  num++;
 	  //printf("val1: %e, val2: %e\n", val1, val2);
 	  //printf("val1-val2: %e\n", fabs(val1-val2));
-	  if (fabs(val1-val2) > diff_epsilon) diff_count++;
+	  if (fabs(val1-val2) > diff_epsilon)
+      {
+		  printf("num: %d, val1: %e, val2: %e, ", num, val1, val2);
+		  printf("val1-val2: %e\n", fabs(val1-val2));
+	      diff_count++;
+	  }
 #if 0
 	  printf("val1: %e, val2: %e\n", val1, val2);
 	  printf("num: %d\n", num++);
@@ -511,20 +585,9 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr, doub
 
   int64_t * pr_lock = (int64_t *)xcalloc(NV,sizeof(double));
 
-  for(uint64_t v = 0; v < NV; v++) { //pr[] initialization
-    pr[v] = 1 / ((double)NV);
-  }
-
   int64_t iter = maxiter;
   double delta = 1;
   int64_t iter_count = 0;
-
-#if SAVE_PR_VALUES == 1
-  LOG_I_A("!!!!!!!!!!!!!!!!called %d \n", fp_idx);
-  char buff[50];
-  sprintf(buff, "pr_values_%d.txt", fp_idx++);
-  fp_pr = fopen(buff, "w");
-#endif
 
 #if TEST_EPSLION_THRESHOLD == 1
   LOG_I_A("NV : %ld", NV);
@@ -538,36 +601,39 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr, doub
 #endif
 
     iter_count++;
+#if IGNORE_PR_CONST != 1
     double pr_constant = 0.0;
-
-    printf("iter_count: %d\n", iter_count);
+#endif
+    //printf("iter_count: %d\n", iter_count);
 
 //    OMP("omp parallel for reduction(+:pr_constant)")
     for (uint64_t v = 0; v < NV; v++) {
       tmp_pr[v] = 0;
+#if IGNORE_PR_CONST != 1
       if (stinger_outdegree(S,v) == 0) {
-#if 0
-        if (v == NV - 1)
-        {
-          printf("pr[%ld]:%5.5e, ", v, pr[v]);
-        }
-#endif
+        //if (v == NV - 1) printf("pr[%ld]:%5.5e, ", v, pr[v]);
         pr_constant += pr[v];
-#if 0
-        if (v == NV - 1)
-        {
-       	  printf("pr_constant: %5.5e\n", pr_constant);
-        }
-#endif
+        //if (v == NV - 1) printf("pr_constant: %5.5e\n", pr_constant);
       }
+#endif
     }
+#if IGNORE_PR_CONST != 1
     //LOG_I_A("pr_constant : %20.15e", pr_constant);
+#endif
 
     STINGER_PARALLEL_FORALL_EDGES_OF_ALL_TYPES_BEGIN(S) {
       int64_t outdegree = stinger_outdegree(S, STINGER_EDGE_SOURCE);
       int64_t count = readfe(&pr_lock[STINGER_EDGE_DEST]);
+#if 1
       tmp_pr[STINGER_EDGE_DEST] += (((double)pr[STINGER_EDGE_SOURCE]) /
         ((double) (outdegree ? outdegree : NV -1)));
+#else
+      printf("-tmp_pr[%d]  = %5.5e, pr[%d]: %5.5e, outdegree: %" PRId64 "\n", STINGER_EDGE_DEST, tmp_pr[STINGER_EDGE_DEST], STINGER_EDGE_SOURCE, pr[STINGER_EDGE_SOURCE], outdegree);
+      tmp_pr[STINGER_EDGE_DEST] += (((double)pr[STINGER_EDGE_SOURCE]) /
+        ((double) (outdegree ? outdegree : NV -1)));
+      printf("+tmp_pr[%d]  = %5.5e, pr[%d]: %5.5e, outdegree: %" PRId64 "\n", STINGER_EDGE_DEST, tmp_pr[STINGER_EDGE_DEST], STINGER_EDGE_SOURCE, pr[STINGER_EDGE_SOURCE], outdegree);
+
+#endif
       writeef(&pr_lock[STINGER_EDGE_DEST],count+1);
     } STINGER_PARALLEL_FORALL_EDGES_OF_ALL_TYPES_END();
 
@@ -583,13 +649,17 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr, doub
 
 //    OMP("omp parallel for")
     for (uint64_t v = 0; v < NV; v++) {
-
+#if 0
       if (v == 0)
       {
     	  printf("tmp_pr[%d]  = %5.5e, pr_constant: %5.5e, pr_constant / (double)NV: %5.5e\n", v, tmp_pr[v], pr_constant, pr_constant / (double)NV);
       }
+#endif
+#if IGNORE_PR_CONST == 1
+      tmp_pr[v] = (tmp_pr[v]) * dampingfactor + (((double)(1-dampingfactor)) / ((double)NV));
+#else
       tmp_pr[v] = (tmp_pr[v] + pr_constant / (double)NV) * dampingfactor + (((double)(1-dampingfactor)) / ((double)NV));
-      //tmp_pr[v] = (tmp_pr[v]) * dampingfactor + (((double)(1-dampingfactor)) / ((double)NV));
+#endif
     }
 #if COUNT_NUM_V_DELTA == 1
     delta = 0;
@@ -626,16 +696,10 @@ page_rank_directed(stinger_t * S, int64_t NV, double * pr, double * tmp_pr, doub
   fprintf(fp, "\n");
 #endif
 
-#if SAVE_PR_VALUES == 1
-  for (uint64_t v = 0; v < NV; v++) {
-    fprintf(fp_pr, "%e ", pr[v]);
-    if (((v+1) % 10) == 0) fprintf(fp_pr, "\n");
-  }
-  fclose(fp_pr);
-#endif
   //unset_tmp_pr(tmp_pr,tmp_pr_in);
   xfree(pr_lock);
 }
+
 
 // NOTE: This only works on Undirected Graphs!
 int64_t

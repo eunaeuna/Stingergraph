@@ -1,0 +1,21 @@
+{
+	"timer_res": 1.000000000000000e-09,,
+	"time_graphread": 1.481108018197119e-02,
+	"time_actionread": 6.756749935448170e-04,
+	"nv": 262144,
+	"ne": 3984308,
+	"batchsize": 100000,
+	"nbatch": 1,
+	"naction": 100000,
+	"time_stinger": 2.575599940028042e-01,
+	"time_stinger": 9.685754776000977e-08,
+	"error_code":"0x0",
+	"time_check": 5.461976793594658e-02----k: 0
+,
+	"time_updates": 6.944020842314382e-310,
+	"updates_per_sec":                  inf,
+	"error_code":"0x0",
+	"time_check": 5.400499491952360e-02
+}
+num: 67591, val1: 2.409320e-05, val2: 2.424443e-05, val1-val2: 1.512300e-07
+diff_count: 1
